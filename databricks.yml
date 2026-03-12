@@ -30,17 +30,6 @@ resources:
                 scope: "llm-test"
                 key: "nexus-api-key"
 
-      # Resources which this app has access to
-      resources:
-        - name: 'experiment'
-          experiment:
-            experiment_id: "47805482660952"
-            permission: 'CAN_MANAGE'
-        - name: 'nexus-api-key'
-          secret:
-            scope: "llm-test"
-            key: "nexus-api-key"
-            permission: 'READ'
 
 targets:
   dev:
