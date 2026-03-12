@@ -17,7 +17,11 @@ env:
   - name: NEXUS_BASE_URL
     value: "https://genai-nexus.int.api.corpinter.net"
   - name: NEXUS_API_KEY
-    value_from:
-      secret:
-        scope: "llm-test"
-        key: "nexus-api-key"
+    valueFrom: "nexus-api-key"
+
+resources:
+  - name: "nexus-api-key"
+    secret:
+      scope: "llm-test"
+      key: "nexus-api-key"
+      permission: "READ"
