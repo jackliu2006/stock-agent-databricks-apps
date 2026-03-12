@@ -14,3 +14,10 @@ env:
     value: "300"
   - name: MLFLOW_EXPERIMENT_ID
     valueFrom: "experiment"
+  - name: NEXUS_BASE_URL
+    value: "https://genai-nexus.int.api.corpinter.net"
+  - name: NEXUS_API_KEY
+    valueFrom:
+      secretRef:
+        scope: "llm-test"
+        key: "nexus-api-key"
