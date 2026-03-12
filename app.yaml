@@ -17,4 +17,4 @@ env:
   - name: NEXUS_BASE_URL
     value: "https://genai-nexus.int.api.corpinter.net"
   - name: NEXUS_API_KEY
-    valueFrom: "nexus-api-key"
+    valueFrom: "nexus"
