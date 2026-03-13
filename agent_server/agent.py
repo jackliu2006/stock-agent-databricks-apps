@@ -6,7 +6,6 @@ import litellm
 import mlflow
 from databricks.sdk import WorkspaceClient
 from databricks_langchain import ChatDatabricks, DatabricksMCPServer, DatabricksMultiServerMCPClient
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from mlflow.genai.agent_server import invoke, stream
@@ -55,15 +54,49 @@ def init_mcp_client(workspace_client: WorkspaceClient) -> DatabricksMultiServerM
     )
 
 
-def init_gradio_mcp_client() -> MultiServerMCPClient:
-    return MultiServerMCPClient(
-        connections={
-            "gradio": {
-                "transport": "sse",
-                "url": "https://victor-web.hf.space/gradio_api/mcp/sse",
-            },
+GRADIO_MCP_URL = "https://victor-web.hf.space/gradio_api/mcp/sse"
+
+
+def _sanitize_input_schema(schema: dict) -> dict:
+    """Remove properties with None definitions from an MCP tool input schema."""
+    if "properties" in schema and isinstance(schema["properties"], dict):
+        schema["properties"] = {
+            k: v for k, v in schema["properties"].items() if isinstance(v, dict)
         }
-    )
+        # Also remove sanitized keys from 'required' if present
+        if "required" in schema:
+            schema["required"] = [
+                r for r in schema["required"] if r in schema["properties"]
+            ]
+    return schema
+
+
+async def load_gradio_tools() -> list:
+    """Load tools from the Gradio MCP server via SSE, sanitizing invalid schemas."""
+    from langchain_core.tools import StructuredTool
+    from langchain_mcp_adapters.sessions import create_session
+
+    connection = {"transport": "sse", "url": GRADIO_MCP_URL}
+    tools = []
+    async with create_session(connection) as session:
+        await session.initialize()
+        result = await session.list_tools()
+        for mcp_tool in result.tools:
+            input_schema = _sanitize_input_schema(mcp_tool.inputSchema)
+
+            async def _make_call(session_conn=connection, tool_name=mcp_tool.name, **kwargs):
+                async with create_session(session_conn) as s:
+                    await s.initialize()
+                    result = await s.call_tool(tool_name, kwargs)
+                    return result.content
+
+            tools.append(StructuredTool(
+                name=mcp_tool.name,
+                description=mcp_tool.description or "",
+                args_schema=input_schema,
+                coroutine=_make_call,
+            ))
+    return tools
 
 
 async def init_agent(workspace_client: Optional[WorkspaceClient] = None):
@@ -79,29 +112,8 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None):
     mcp_client = init_mcp_client(workspace_client or sp_workspace_client)
     tools.extend(await mcp_client.get_tools())
     try:
-        gradio_client = init_gradio_mcp_client()
-        gradio_tools = await gradio_client.get_tools()
-        # Filter out tools with invalid schemas
-        valid_tools = []
-        for t in gradio_tools:
-            try:
-                schema = t.args_schema
-                if schema is None:
-                    valid_tools.append(t)
-                    continue
-                # args_schema can be a Pydantic model class or a dict
-                if isinstance(schema, dict):
-                    props = schema.get("properties", {})
-                else:
-                    props = schema.model_json_schema().get("properties", {})
-                # Check all property definitions are valid dicts
-                for prop_name, prop_def in props.items():
-                    if not isinstance(prop_def, dict):
-                        raise ValueError(f"Property '{prop_name}' has invalid definition: {prop_def}")
-                valid_tools.append(t)
-            except Exception as e:
-                logging.warning(f"Skipping Gradio tool '{t.name}' due to invalid schema: {e}")
-        tools.extend(valid_tools)
+        gradio_tools = await load_gradio_tools()
+        tools.extend(gradio_tools)
     except Exception as e:
         logging.warning(f"Failed to load Gradio MCP tools: {e}")
     return create_agent(tools=tools, model=model)
