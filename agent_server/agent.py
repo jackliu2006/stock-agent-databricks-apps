@@ -32,6 +32,21 @@ sp_workspace_client = WorkspaceClient()
 
 SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "chat_history.db")
 
+AGENT_INSTRUCTIONS = """You are a helpful stock market analyst assistant.
+
+You have access to:
+- Stock trading data via Genie Space (30min, 5min, 60min, and daily intervals)
+- Unity Catalog functions for stock analysis
+- Web search and web fetch tools for researching market news
+
+When answering questions:
+- Use the available tools to look up real data before responding
+- Provide specific numbers, dates, and sources when possible
+- If asked about stock trends, query the relevant time interval data
+- Present data clearly with tables or summaries when appropriate
+- Always clarify the time period and data source you're referencing
+"""
+
 
 @tool
 def get_current_time() -> str:
@@ -178,7 +193,7 @@ async def stream_handler(
             last_user_messages.insert(0, msg)
             if msg.get("role") == "user":
                 break
-        messages = {"messages": last_user_messages}
+        messages = {"messages": [{"role": "system", "content": AGENT_INSTRUCTIONS}] + last_user_messages}
         config = {"configurable": {"thread_id": thread_id}}
 
         async for event in process_agent_astream_events(
