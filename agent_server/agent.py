@@ -169,8 +169,16 @@ async def stream_handler(
         await checkpointer.setup()
         agent = await init_agent(checkpointer=checkpointer)
         thread_id = session_id or "default"
-        messages = {"messages": to_chat_completions_input(
-            [i.model_dump() for i in request.input])}
+        # With a checkpointer, LangGraph manages history internally.
+        # Only send the last user message to avoid duplicating history.
+        all_messages = to_chat_completions_input(
+            [i.model_dump() for i in request.input])
+        last_user_messages = []
+        for msg in reversed(all_messages):
+            last_user_messages.insert(0, msg)
+            if msg.get("role") == "user":
+                break
+        messages = {"messages": last_user_messages}
         config = {"configurable": {"thread_id": thread_id}}
 
         async for event in process_agent_astream_events(
