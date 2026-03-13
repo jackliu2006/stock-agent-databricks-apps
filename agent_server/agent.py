@@ -78,8 +78,22 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None):
     # To use MCP server tools instead, replace the line above with:
     mcp_client = init_mcp_client(workspace_client or sp_workspace_client)
     tools.extend(await mcp_client.get_tools())
-    gradio_client = init_gradio_mcp_client()
-    tools.extend(await gradio_client.get_tools())
+    try:
+        gradio_client = init_gradio_mcp_client()
+        gradio_tools = await gradio_client.get_tools()
+        # Filter out tools with invalid schemas
+        valid_tools = []
+        for t in gradio_tools:
+            try:
+                # Validate the tool schema by checking its args_schema
+                if t.args_schema:
+                    t.args_schema.model_json_schema()
+                valid_tools.append(t)
+            except Exception as e:
+                logging.warning(f"Skipping Gradio tool '{t.name}' due to invalid schema: {e}")
+        tools.extend(valid_tools)
+    except Exception as e:
+        logging.warning(f"Failed to load Gradio MCP tools: {e}")
     return create_agent(tools=tools, model=model)
 
 
