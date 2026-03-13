@@ -85,9 +85,19 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None):
         valid_tools = []
         for t in gradio_tools:
             try:
-                # Validate the tool schema by checking its args_schema
-                if t.args_schema:
-                    t.args_schema.model_json_schema()
+                schema = t.args_schema
+                if schema is None:
+                    valid_tools.append(t)
+                    continue
+                # args_schema can be a Pydantic model class or a dict
+                if isinstance(schema, dict):
+                    props = schema.get("properties", {})
+                else:
+                    props = schema.model_json_schema().get("properties", {})
+                # Check all property definitions are valid dicts
+                for prop_name, prop_def in props.items():
+                    if not isinstance(prop_def, dict):
+                        raise ValueError(f"Property '{prop_name}' has invalid definition: {prop_def}")
                 valid_tools.append(t)
             except Exception as e:
                 logging.warning(f"Skipping Gradio tool '{t.name}' due to invalid schema: {e}")
