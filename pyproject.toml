@@ -19,6 +19,8 @@ dependencies = [
     "databricks-sql-connector",
     "databricks-sdk",
     "langchain-google-genai>=4.2.1",
+    "langgraph-checkpoint-sqlite>=2.0.0",
+    "aiosqlite>=0.21.0",
 ]
 
 [build-system]

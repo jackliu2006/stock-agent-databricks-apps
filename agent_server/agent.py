@@ -8,6 +8,7 @@ from databricks.sdk import WorkspaceClient
 from databricks_langchain import ChatDatabricks, DatabricksMCPServer, DatabricksMultiServerMCPClient
 from langchain.agents import create_agent
 from langchain_core.tools import tool
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from mlflow.genai.agent_server import invoke, stream
 from mlflow.types.responses import (
     ResponsesAgentRequest,
@@ -28,6 +29,8 @@ mlflow.langchain.autolog()
 logging.getLogger("mlflow.utils.autologging_utils").setLevel(logging.ERROR)
 litellm.suppress_debug_info = True
 sp_workspace_client = WorkspaceClient()
+
+SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "chat_history.db")
 
 
 @tool
@@ -123,7 +126,7 @@ async def load_gradio_tools() -> list:
     return tools
 
 
-async def init_agent(workspace_client: Optional[WorkspaceClient] = None):
+async def init_agent(workspace_client: Optional[WorkspaceClient] = None, checkpointer=None):
     tools = []
     model = ChatGoogleGenerativeAI(
         model="gemini-3.1-pro-preview",  # see table above to set the desired model id
@@ -140,7 +143,7 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None):
         tools.extend(gradio_tools)
     except Exception as e:
         logging.warning(f"Failed to load Gradio MCP tools: {e}")
-    return create_agent(tools=tools, model=model)
+    return create_agent(tools=tools, model=model, checkpointer=checkpointer)
 
 
 @invoke()
@@ -157,18 +160,20 @@ async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentRespon
 async def stream_handler(
     request: ResponsesAgentRequest,
 ) -> AsyncGenerator[ResponsesAgentStreamEvent, None]:
-    if session_id := get_session_id(request):
+    session_id = get_session_id(request)
+    if session_id:
         mlflow.update_current_trace(
             metadata={"mlflow.trace.session": session_id})
 
-    # By default, uses service principal credentials.
-    # For on-behalf-of user authentication, use get_user_workspace_client() instead:
-    #   agent = await init_agent(workspace_client=get_user_workspace_client())
-    agent = await init_agent()
-    messages = {"messages": to_chat_completions_input(
-        [i.model_dump() for i in request.input])}
+    async with AsyncSqliteSaver.from_conn_string(SQLITE_DB_PATH) as checkpointer:
+        await checkpointer.setup()
+        agent = await init_agent(checkpointer=checkpointer)
+        thread_id = session_id or "default"
+        messages = {"messages": to_chat_completions_input(
+            [i.model_dump() for i in request.input])}
+        config = {"configurable": {"thread_id": thread_id}}
 
-    async for event in process_agent_astream_events(
-        agent.astream(input=messages, stream_mode=["updates", "messages"])
-    ):
-        yield event
+        async for event in process_agent_astream_events(
+            agent.astream(input=messages, stream_mode=["updates", "messages"], config=config)
+        ):
+            yield event
