@@ -59,16 +59,39 @@ GRADIO_MCP_URL = "https://victor-web.hf.space/gradio_api/mcp/sse"
 
 def _sanitize_input_schema(schema: dict) -> dict:
     """Remove properties with None definitions from an MCP tool input schema."""
+    schema = dict(schema)  # shallow copy
     if "properties" in schema and isinstance(schema["properties"], dict):
         schema["properties"] = {
             k: v for k, v in schema["properties"].items() if isinstance(v, dict)
         }
-        # Also remove sanitized keys from 'required' if present
         if "required" in schema:
             schema["required"] = [
                 r for r in schema["required"] if r in schema["properties"]
             ]
     return schema
+
+
+def _schema_dict_to_model(name: str, schema: dict):
+    """Convert a JSON Schema dict to a Pydantic model class."""
+    from pydantic import create_model, Field
+
+    type_map = {"string": str, "integer": int, "number": float, "boolean": bool}
+    fields = {}
+    properties = schema.get("properties", {})
+    required = set(schema.get("required", []))
+
+    for prop_name, prop_def in properties.items():
+        if not isinstance(prop_def, dict):
+            continue
+        py_type = type_map.get(prop_def.get("type", "string"), str)
+        description = prop_def.get("description", "")
+        if prop_name in required:
+            fields[prop_name] = (py_type, Field(description=description))
+        else:
+            default = prop_def.get("default")
+            fields[prop_name] = (Optional[py_type], Field(default=default, description=description))
+
+    return create_model(name, **fields)
 
 
 async def load_gradio_tools() -> list:
@@ -82,18 +105,19 @@ async def load_gradio_tools() -> list:
         await session.initialize()
         result = await session.list_tools()
         for mcp_tool in result.tools:
-            input_schema = _sanitize_input_schema(mcp_tool.inputSchema)
+            sanitized = _sanitize_input_schema(mcp_tool.inputSchema)
+            args_model = _schema_dict_to_model(mcp_tool.name + "_args", sanitized)
 
             async def _make_call(session_conn=connection, tool_name=mcp_tool.name, **kwargs):
                 async with create_session(session_conn) as s:
                     await s.initialize()
-                    result = await s.call_tool(tool_name, kwargs)
-                    return result.content
+                    call_result = await s.call_tool(tool_name, kwargs)
+                    return call_result.content
 
             tools.append(StructuredTool(
                 name=mcp_tool.name,
                 description=mcp_tool.description or "",
-                args_schema=input_schema,
+                args_schema=args_model,
                 coroutine=_make_call,
             ))
     return tools
