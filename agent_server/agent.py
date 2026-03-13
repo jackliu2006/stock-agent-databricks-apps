@@ -153,16 +153,9 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None, checkpo
     # To use MCP server tools instead, replace the line above with:
     mcp_client = init_mcp_client(workspace_client or sp_workspace_client)
     mcp_tools = await mcp_client.get_tools()
-    # Wrap MCP tool coroutines with mlflow.trace for visibility in experiment traces
-    for t in mcp_tools:
-        if t.coroutine:
-            t.coroutine = mlflow.trace(t.coroutine, name=t.name, span_type="TOOL")
     tools.extend(mcp_tools)
     try:
         gradio_tools = await load_gradio_tools()
-        for t in gradio_tools:
-            if t.coroutine:
-                t.coroutine = mlflow.trace(t.coroutine, name=t.name, span_type="TOOL")
         tools.extend(gradio_tools)
     except Exception as e:
         logging.warning(f"Failed to load Gradio MCP tools: {e}")
