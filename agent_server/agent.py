@@ -5,7 +5,8 @@ from typing import AsyncGenerator, Optional
 import litellm
 import mlflow
 from databricks.sdk import WorkspaceClient
-from databricks_langchain import ChatDatabricks, DatabricksMCPServer, DatabricksMultiServerMCPClient, MCPServer
+from databricks_langchain import ChatDatabricks, DatabricksMCPServer, DatabricksMultiServerMCPClient
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from mlflow.genai.agent_server import invoke, stream
@@ -50,11 +51,18 @@ def init_mcp_client(workspace_client: WorkspaceClient) -> DatabricksMultiServerM
                 url=f"{host_name}/api/2.0/mcp/functions/workspace/stock",
                 workspace_client=workspace_client,
             ),
-            MCPServer(
-                name="gradio",
-                url="https://victor-web.hf.space/gradio_api/mcp/sse",
-            ),
         ]
+    )
+
+
+def init_gradio_mcp_client() -> MultiServerMCPClient:
+    return MultiServerMCPClient(
+        connections={
+            "gradio": {
+                "transport": "sse",
+                "url": "https://victor-web.hf.space/gradio_api/mcp/sse",
+            },
+        }
     )
 
 
@@ -70,6 +78,8 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None):
     # To use MCP server tools instead, replace the line above with:
     mcp_client = init_mcp_client(workspace_client or sp_workspace_client)
     tools.extend(await mcp_client.get_tools())
+    gradio_client = init_gradio_mcp_client()
+    tools.extend(await gradio_client.get_tools())
     return create_agent(tools=tools, model=model)
 
 
