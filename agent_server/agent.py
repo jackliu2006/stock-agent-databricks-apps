@@ -41,6 +41,7 @@ You have access to:
 
 When answering questions:
 - Use the available tools to look up real data before responding
+- All stock data should be sourced from the Genie Space tool, not from memory, not from internet search results
 - Provide specific numbers, dates, and sources when possible
 - If asked about stock trends, query the relevant time interval data
 - Present data clearly with tables or summaries when appropriate
