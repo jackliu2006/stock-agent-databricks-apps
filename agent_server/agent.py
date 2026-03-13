@@ -5,7 +5,7 @@ from typing import AsyncGenerator, Optional
 import litellm
 import mlflow
 from databricks.sdk import WorkspaceClient
-from databricks_langchain import ChatDatabricks, DatabricksMCPServer, DatabricksMultiServerMCPClient
+from databricks_langchain import ChatDatabricks, DatabricksMCPServer, DatabricksMultiServerMCPClient, MCPServer
 from langchain.agents import create_agent
 from langchain_core.tools import tool
 from mlflow.genai.agent_server import invoke, stream
@@ -49,6 +49,10 @@ def init_mcp_client(workspace_client: WorkspaceClient) -> DatabricksMultiServerM
                 name="workspace-stock-function",
                 url=f"{host_name}/api/2.0/mcp/functions/workspace/stock",
                 workspace_client=workspace_client,
+            ),
+            MCPServer(
+                name="gradio",
+                url="https://victor-web.hf.space/gradio_api/mcp/sse",
             ),
         ]
     )
