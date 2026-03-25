@@ -113,33 +113,6 @@ def _schema_dict_to_model(name: str, schema: dict):
     return create_model(name, **fields)
 
 
-async def load_gradio_tools() -> list:
-    """Load tools from the Gradio MCP server via SSE, sanitizing invalid schemas."""
-    from langchain_core.tools import StructuredTool
-    from langchain_mcp_adapters.sessions import create_session
-
-    connection = {"transport": "sse", "url": GRADIO_MCP_URL}
-    tools = []
-    async with create_session(connection) as session:
-        await session.initialize()
-        result = await session.list_tools()
-        for mcp_tool in result.tools:
-            sanitized = _sanitize_input_schema(mcp_tool.inputSchema)
-            args_model = _schema_dict_to_model(mcp_tool.name + "_args", sanitized)
-
-            async def _make_call(session_conn=connection, tool_name=mcp_tool.name, **kwargs):
-                async with create_session(session_conn) as s:
-                    await s.initialize()
-                    call_result = await s.call_tool(tool_name, kwargs)
-                    return call_result.content
-
-            tools.append(StructuredTool(
-                name=mcp_tool.name,
-                description=mcp_tool.description or "",
-                args_schema=args_model,
-                coroutine=_make_call,
-            ))
-    return tools
 
 
 async def init_agent(workspace_client: Optional[WorkspaceClient] = None, checkpointer=None):
@@ -156,11 +129,6 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None, checkpo
     mcp_client = init_mcp_client(workspace_client or sp_workspace_client)
     mcp_tools = await mcp_client.get_tools()
     tools.extend(mcp_tools)
-    try:
-        gradio_tools = await load_gradio_tools()
-        tools.extend(gradio_tools)
-    except Exception as e:
-        logging.warning(f"Failed to load Gradio MCP tools: {e}")
     return create_agent(tools=tools, model=model, checkpointer=checkpointer)
 
 
