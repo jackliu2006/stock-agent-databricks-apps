@@ -149,7 +149,8 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None, checkpo
         client_options={"api_endpoint": os.getenv("NEXUS_BASE_URL")},
         # Use your Nexus API key here
         google_api_key=os.getenv("NEXUS_API_KEY"),
-     #   transport="rest",       # otherwise will use gRPC which is not supported by Nexus
+        temperature=0.1,
+        max_output_tokens=512,  # Unlocks the full 64K output capacity
     )
     # To use MCP server tools instead, replace the line above with:
     mcp_client = init_mcp_client(workspace_client or sp_workspace_client)
