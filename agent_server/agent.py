@@ -130,14 +130,14 @@ async def init_agent(workspace_client: Optional[WorkspaceClient] = None, checkpo
     return create_agent(tools=tools, model=model, checkpointer=checkpointer)
 
 
-@invoke()
-async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentResponse:
-    outputs = [
-        event.item
-        async for event in stream_handler(request)
-        if event.type == "response.output_item.done"
-    ]
-    return ResponsesAgentResponse(output=outputs)
+#@invoke()
+#async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentResponse:
+   # outputs = [
+   #     event.item
+  #      async for event in stream_handler(request)
+   #     if event.type == "response.output_item.done"
+  #  ]
+  #  return ResponsesAgentResponse(output=outputs)
 
 
 @stream()
