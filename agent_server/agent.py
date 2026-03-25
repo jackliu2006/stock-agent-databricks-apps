@@ -144,11 +144,10 @@ async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentRespon
 async def stream_handler(
     request: ResponsesAgentRequest,
 ) -> AsyncGenerator[ResponsesAgentStreamEvent, None]:
-    session_id = get_session_id(request)
 
 
     agent = await init_agent()
-    thread_id = session_id or "default"
+    thread_id = "default"
         # With a checkpointer, LangGraph manages history internally.
         # Only send the last user message to avoid duplicating history.
     all_messages = to_chat_completions_input(
