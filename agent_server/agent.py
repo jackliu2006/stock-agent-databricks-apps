@@ -25,8 +25,6 @@ from agent_server.utils import (
     process_agent_astream_events,
 )
 
-mlflow.langchain.autolog(log_traces=True)
-logging.getLogger("mlflow.utils.autologging_utils").setLevel(logging.ERROR)
 litellm.suppress_debug_info = True
 sp_workspace_client = WorkspaceClient()
 
@@ -147,9 +145,6 @@ async def stream_handler(
     request: ResponsesAgentRequest,
 ) -> AsyncGenerator[ResponsesAgentStreamEvent, None]:
     session_id = get_session_id(request)
-    if session_id:
-        mlflow.update_current_trace(
-            metadata={"mlflow.trace.session": session_id})
 
 
     agent = await init_agent()
